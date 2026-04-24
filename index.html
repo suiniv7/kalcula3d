@@ -19,10 +19,10 @@
 body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:14px}
 
 header{background:var(--text);padding:0 24px;display:flex;align-items:center;position:sticky;top:0;z-index:100;height:52px}
-.logo{font-family:var(--mono);font-weight:500;font-size:.9rem;color:#fff;letter-spacing:.5px;margin-right:24px;white-space:nowrap}
+.logo{font-family:var(--mono);font-weight:500;font-size:.9rem;color:#fff;letter-spacing:.5px;margin-right:12px;white-space:nowrap;flex-shrink:0}
 .logo em{color:var(--accent);font-style:normal}
 nav{display:flex;height:100%;overflow-x:auto}
-nav button{background:none;border:none;border-bottom:3px solid transparent;color:rgba(255,255,255,.42);font-family:var(--sans);font-size:.74rem;font-weight:500;padding:0 13px;cursor:pointer;transition:all .15s;height:100%;white-space:nowrap}
+nav button{background:none;border:none;border-bottom:3px solid transparent;color:rgba(255,255,255,.42);font-family:var(--sans);font-size:.72rem;font-weight:500;padding:0 10px;cursor:pointer;transition:all .15s;height:100%;white-space:nowrap}
 nav button:hover{color:rgba(255,255,255,.75)}
 nav button.active{color:#fff;border-bottom-color:var(--accent)}
 
@@ -296,9 +296,9 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
 .login-footer { font-size: .72rem; color: var(--muted); margin-top: 20px; line-height: 1.6; }
 
 /* USER AREA IN HEADER */
-.user-area { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.user-area { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; padding-left: 8px; }
 .user-avatar { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); }
-.user-name-lbl { font-size: .75rem; color: rgba(255,255,255,.7); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-name-lbl { font-size: .72rem; color: rgba(255,255,255,.7); max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-logout { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.7); font-family: var(--sans); font-size: .7rem; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: all .15s; }
 .btn-logout:hover { background: rgba(255,255,255,.2); color: #fff; }
 
@@ -395,12 +395,24 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
 /* PEDIDOS TABLE ENHANCEMENTS */
 .ped-row-entregue td { opacity:.7; }
 .ped-row-cancelado td { opacity:.45; text-decoration:line-through; }
+
+/* ANON BANNER */
+#anon-banner {
+  display:none; align-items:center; justify-content:center; gap:10px;
+  background:#fef3c7; border-bottom:1px solid #fcd34d;
+  padding:8px 16px; font-size:.78rem; color:#92400e; font-weight:500;
+}
+#anon-banner button {
+  background:#d97706; color:#fff; border:none; font-family:var(--sans);
+  font-size:.75rem; font-weight:700; padding:5px 12px; border-radius:5px;
+  cursor:pointer;
+}
 </style>
 
 <!-- Firebase -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc, query, where }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -421,7 +433,7 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
 
   // Expose globally
   window._FB = { auth, db, provider, signInWithPopup, signOut,
-                 onAuthStateChanged, doc, setDoc, getDoc,
+                 onAuthStateChanged, signInAnonymously, doc, setDoc, getDoc,
                  collection, getDocs, deleteDoc, query, where };
 
   // Auth state listener
@@ -430,8 +442,21 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
       window._currentUser = user;
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app-screen').style.display   = 'block';
-      document.getElementById('user-name').textContent = user.displayName || user.email;
-      document.getElementById('user-avatar').src = user.photoURL || '';
+      const isAnon = user.isAnonymous;
+      const avatarEl = document.getElementById('user-avatar');
+      const fallbackEl = document.getElementById('user-avatar-fallback');
+      if (avatarEl) {
+        if (!isAnon && user.photoURL) {
+          avatarEl.src = user.photoURL;
+          avatarEl.style.display = 'block';
+          if (fallbackEl) fallbackEl.style.display = 'none';
+        } else {
+          avatarEl.style.display = 'none';
+          if (fallbackEl) fallbackEl.style.display = 'block';
+        }
+      }
+      const anonBanner = document.getElementById('anon-banner');
+      if (anonBanner) anonBanner.style.display = isAnon ? 'flex' : 'none';
       loadAllFromFirestore();
     } else {
       window._currentUser = null;
@@ -441,6 +466,18 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
   });
 
   window.doLogin = async () => {
+    try {
+      await signInWithPopup(auth, provider);
+    } catch(e) { alert('Erro no login: ' + e.message); }
+  };
+
+  window.doLoginAnonymous = async () => {
+    try {
+      await signInAnonymously(auth);
+    } catch(e) { alert('Erro: ' + e.message); }
+  };
+
+  window.upgradeToGoogle = async () => {
     try {
       await signInWithPopup(auth, provider);
     } catch(e) { alert('Erro no login: ' + e.message); }
@@ -509,16 +546,59 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
+<!-- LOGIN / LANDING SCREEN -->
 <div id="login-screen" style="display:none">
-  <div class="login-box">
-    <div class="login-logo">kalcula<span>3d</span></div>
-    <div class="login-tagline">Precificação inteligente para impressão 3D.<br>Seus dados salvos na nuvem, em qualquer dispositivo.</div>
-    <button class="btn-google" onclick="doLogin()">
-      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
-      Entrar com Google
-    </button>
-    <div class="login-footer">Seus dados ficam salvos na sua conta.<br>Nenhuma informação é compartilhada.</div>
+  <div style="width:100%;max-width:960px;margin:0 auto;padding:40px 20px">
+
+    <!-- HERO -->
+    <div style="text-align:center;margin-bottom:48px">
+      <div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:var(--accent);margin-bottom:8px">kalcula<span style="color:var(--text)">3d</span></div>
+      <h1 style="font-size:2rem;font-weight:900;letter-spacing:-.5px;margin-bottom:12px;line-height:1.2">Precificação inteligente<br>para impressão 3D</h1>
+      <p style="color:var(--muted);font-size:.95rem;max-width:480px;margin:0 auto;line-height:1.6">
+        Calcule o custo real de cada impressão, gerencie pedidos, controle estoque de filamentos e acompanhe suas metas financeiras.
+      </p>
+    </div>
+
+    <!-- FEATURES -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:48px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow)">
+        <div style="font-size:1.5rem;margin-bottom:8px">🧮</div>
+        <div style="font-weight:700;margin-bottom:4px">Custo real</div>
+        <div style="font-size:.78rem;color:var(--muted);line-height:1.5">Filamento, energia, amortização e taxas — tudo calculado com precisão</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow)">
+        <div style="font-size:1.5rem;margin-bottom:8px">📸</div>
+        <div style="font-weight:700;margin-bottom:4px">Leitura do slicer</div>
+        <div style="font-size:.78rem;color:var(--muted);line-height:1.5">Envie um print do Bambu Studio e a IA preenche os campos automaticamente</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow)">
+        <div style="font-size:1.5rem;margin-bottom:8px">📦</div>
+        <div style="font-weight:700;margin-bottom:4px">Gestão de pedidos</div>
+        <div style="font-size:.78rem;color:var(--muted);line-height:1.5">Pendente → Confirmado → Produzindo → Pronto → Entregue</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow)">
+        <div style="font-size:1.5rem;margin-bottom:8px">🎯</div>
+        <div style="font-weight:700;margin-bottom:4px">Metas e semáforo</div>
+        <div style="font-size:.78rem;color:var(--muted);line-height:1.5">Saiba se seu negócio está no 🔴 Ruim, 🟡 Aceitável ou 🟢 Bom</div>
+      </div>
+    </div>
+
+    <!-- LOGIN BUTTONS -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;max-width:360px;margin:0 auto">
+      <button class="btn-google" onclick="doLogin()" style="width:100%">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+        Entrar com Google
+      </button>
+      <button onclick="doLoginAnonymous()" style="width:100%;background:none;border:1.5px dashed var(--border2);color:var(--muted);font-family:var(--sans);font-size:.85rem;font-weight:600;padding:11px 20px;border-radius:8px;cursor:pointer;transition:all .15s"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--text)'"
+        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted)'">
+        Explorar sem conta →
+      </button>
+      <div style="font-size:.72rem;color:var(--muted);text-align:center;line-height:1.6">
+        Com Google seus dados ficam salvos na nuvem.<br>
+        Sem conta você pode explorar, mas os dados não são salvos.
+      </div>
+    </div>
   </div>
 </div>
 
@@ -567,10 +647,10 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
     <span class="fr-lbl" style="margin-left:8px">Status</span>
     <select id="ped-status-filter" onchange="renderPedidos()" style="width:auto">
       <option value="all">Todos</option>
-      <option value="orcamento">Orçamento</option>
-      <option value="pago50">50% Pago</option>
-      <option value="fazendo">Fazendo</option>
-      <option value="feito">Feito</option>
+      <option value="pendente">Pendente</option>
+      <option value="confirmado">Confirmado</option>
+      <option value="produzindo">Produzindo</option>
+      <option value="pronto">Pronto</option>
       <option value="entregue">Entregue</option>
       <option value="cancelado">Cancelado</option>
     </select>
@@ -1082,6 +1162,25 @@ function setMode(m) {
 }
 
 // ══════════ IMPRESSORAS ══════════
+
+function toggleUserMenu() {
+  const menu = document.getElementById('user-menu');
+  const user = window._currentUser;
+  if (user) {
+    document.getElementById('user-menu-name').textContent = user.isAnonymous ? 'Visitante' : (user.displayName || 'Usuário');
+    document.getElementById('user-menu-email').textContent = user.isAnonymous ? 'Modo visitante — dados não salvos' : (user.email || '');
+    document.getElementById('btn-upgrade-google').style.display = user.isAnonymous ? 'block' : 'none';
+  }
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  if (menu.style.display === 'block') {
+    setTimeout(() => document.addEventListener('click', function handler(e) {
+      if (!document.getElementById('user-menu-btn').contains(e.target) && !menu.contains(e.target)) {
+        menu.style.display='none';
+        document.removeEventListener('click', handler);
+      }
+    }), 10);
+  }
+}
 function togglePrinterPayFields() {
   const s = document.getElementById('p-status').value;
   document.getElementById('p-parcela-fields').style.display = s==='parcelando' ? '' : 'none';
@@ -1428,7 +1527,7 @@ function salvarPedido(){
   if(!usados.length){toast('⚠️ Adicione ao menos um filamento com peso');return;}
   const ps=DB.pedidos;
   const dataISO = (() => { try { const [d,m,y]=data.split('/'); return new Date(y,m-1,d).toISOString(); } catch(e){ return new Date().toISOString(); } })();
-  ps.unshift({id:uid(),nome,data,dataISO,filamentos:usados,status:'orcamento',estoqueDescontado:false,...res});
+  ps.unshift({id:uid(),nome,data,dataISO,filamentos:usados,status:'pendente',estoqueDescontado:false,...res});
   // Pedido salvo como orçamento — estoque só descontado ao marcar Entregue
   DB.pedidos=ps; toast('✅ Pedido salvo!'); populateMonths(); limpar();
 }
@@ -1465,14 +1564,14 @@ function filterPeds(month){
   return ps.filter(p=>{if(!p.data)return false;const pts=p.data.split('/');return pts.length===3&&pts[2]+'-'+pts[1]===month;});
 }
 const STATUS_CONFIG = {
-  orcamento: { label:'Orçamento', cls:'status-orcamento', emoji:'📋' },
-  pago50:    { label:'50% Pago',  cls:'status-pago50',    emoji:'💰' },
-  fazendo:   { label:'Fazendo',   cls:'status-fazendo',   emoji:'⚙️' },
-  feito:     { label:'Feito',     cls:'status-feito',     emoji:'✅' },
-  entregue:  { label:'Entregue',  cls:'status-entregue',  emoji:'📦' },
-  cancelado: { label:'Cancelado', cls:'status-cancelado', emoji:'❌' },
+  pendente:   { label:'Pendente',   cls:'status-orcamento', emoji:'📋' },
+  confirmado: { label:'Confirmado', cls:'status-pago50',    emoji:'✔️' },
+  produzindo: { label:'Produzindo', cls:'status-fazendo',   emoji:'⚙️' },
+  pronto:     { label:'Pronto',     cls:'status-feito',     emoji:'✅' },
+  entregue:   { label:'Entregue',   cls:'status-entregue',  emoji:'📦' },
+  cancelado:  { label:'Cancelado',  cls:'status-cancelado', emoji:'❌' },
 };
-const STATUS_ORDER = ['orcamento','pago50','fazendo','feito','entregue','cancelado'];
+const STATUS_ORDER = ['pendente','confirmado','produzindo','pronto','entregue','cancelado'];
 
 function setStatus(pedId, newStatus) {
   // Close any open menus
@@ -1483,34 +1582,34 @@ function setStatus(pedId, newStatus) {
   const oldStatus = ps[idx].status;
   ps[idx].status = newStatus;
 
-  // Descont estoque ao entregar (só uma vez)
-  if (newStatus==='entregue' && !ps[idx].estoqueDescontado) {
-    const fsAtual = DB.fils;
-    (ps[idx].filamentos||[]).forEach(u => {
-      const fi = fsAtual.findIndex(f=>f.nome===u.nome);
-      if (fi>=0) {
-        const est = fsAtual[fi].estoque ?? fsAtual[fi].peso;
-        fsAtual[fi].estoque = Math.max(0, est - u.gramas);
-      }
-    });
-    DB.fils = fsAtual;
-    ps[idx].estoqueDescontado = true;
-    renderFils();
-    toast('📦 Entregue! Estoque atualizado.');
-  } else {
-    toast(`Status: ${STATUS_CONFIG[newStatus]?.label}`);
-  }
-
-  // If reverting from entregue, warn
-  if (oldStatus==='entregue' && newStatus!=='entregue' && ps[idx].estoqueDescontado) {
-    toast('⚠️ Revertido — estoque não foi devolvido automaticamente');
-  }
+  toast(`Status: ${STATUS_CONFIG[newStatus]?.label||newStatus}`);
 
   DB.pedidos = ps;
   renderPedidos();
   renderDashboard();
 }
 
+
+function descontarEstoque(pedId) {
+  const ps = DB.pedidos;
+  const idx = ps.findIndex(p=>p.id===pedId);
+  if (idx===-1) return;
+  if (ps[idx].estoqueDescontado) { toast('⚠️ Estoque já foi descontado para este pedido'); return; }
+  if (!confirm('Descontar o estoque dos filamentos deste pedido?')) return;
+  const fsAtual = DB.fils;
+  (ps[idx].filamentos||[]).forEach(u => {
+    const fi = fsAtual.findIndex(f=>f.nome===u.nome);
+    if (fi>=0) {
+      const est = fsAtual[fi].estoque ?? fsAtual[fi].peso;
+      fsAtual[fi].estoque = Math.max(0, est - u.gramas);
+    }
+  });
+  DB.fils = fsAtual;
+  ps[idx].estoqueDescontado = true;
+  DB.pedidos = ps;
+  renderFils(); renderPedidos();
+  toast('✅ Estoque descontado!');
+}
 function openStatusMenu(pedId, btn) {
   document.querySelectorAll('.status-menu').forEach(m=>m.remove());
   const menu = document.createElement('div');
@@ -1582,7 +1681,12 @@ function renderPedidos(){
       <td class="mc">${R(p.custoTotal)}</td>
       <td class="mc" style="color:${p.precoFinal&&p.precoFinal!==p.precoConsumidor?'var(--blue)':'inherit'}">${R(p.precoFinal||p.precoConsumidor)}</td>
       <td class="${cls}">${R(lucroMostrar)}</td>
-      <td>${estoqueInfo}</td>
+      <td>
+        ${p.estoqueDescontado
+          ? '<span style="font-size:.68rem;color:var(--green);font-weight:600">✓ descontado</span>'
+          : `<button class="btn btn-sm" style="background:rgba(26,107,60,.1);color:var(--green);border:1px solid rgba(26,107,60,.2);font-size:.68rem;padding:4px 8px" onclick="descontarEstoque('${p.id}')">−📦</button>`
+        }
+      </td>
       <td><button class="btn-del" onclick="delPedido('${p.id}')">✕</button></td>
     </tr>`;
   }).join('');
@@ -2085,26 +2189,34 @@ async function analyzeSlicer(dataUrl) {
             },
             {
               type: 'text',
-              text: `Esta é uma captura de tela do Bambu Studio ou Orca Slicer (impressão 3D).
-Analise CUIDADOSAMENTE e retorne APENAS JSON válido, sem markdown, sem texto extra:
+              text: `Esta é uma captura de tela do Bambu Studio em português (impressão 3D multicolorida).
+O painel "Resultado do fatiamento" mostra uma tabela com colunas: Filamento | Modelo | Suporte | Corado | Torre | Total
+Cada linha é um filamento numerado (1, 2, 3...) com valores em metros e gramas.
+A última linha "Total" soma tudo.
+Abaixo da tabela aparece "Estimativa de tempo" com "Tempo total".
+Na mesa 3D é possível contar os objetos.
+
+Retorne APENAS JSON válido, sem markdown, sem texto extra:
 {
-  "modelo": "nome do arquivo/modelo visível no topo da janela",
-  "num_objetos": número de objetos na mesa de impressão (null se não visível),
-  "tempo_horas": horas decimais totais (ex: 1h30m = 1.5, null se não visível),
+  "modelo": "nome do arquivo visível na barra de título ou null",
+  "num_objetos": número inteiro de objetos na mesa (conte visualmente),
+  "tempo_total_horas": número decimal (ex: 9h13m = 9.22, 1h30m = 1.5),
   "filamentos": [
     {
-      "cor": "nome da cor (ex: Bambu PLA Jade White)",
-      "hex": "código hex se visível (ex: #ffffff)",
-      "tipo": "PLA/PETG/ABS/TPU etc",
-      "peso_total_g": total usado deste filamento em gramas,
-      "peso_peca_g": peso só da peça em gramas (sem suporte/purga),
-      "peso_suporte_g": peso do suporte em gramas (null se não usar),
-      "peso_purga_g": peso da torre de purga + purgas em gramas (null se não usar)
+      "numero": 1,
+      "cor": "cor/nome se visível ou Filamento 1",
+      "peso_modelo_g": gramas da coluna Modelo,
+      "peso_suporte_g": gramas da coluna Suporte (0 se vazio),
+      "peso_corado_g": gramas da coluna Corado (purgas entre trocas),
+      "peso_torre_g": gramas da coluna Torre (torre de purga),
+      "peso_total_g": gramas da coluna Total
     }
   ],
-  "observacoes": "outras informações relevantes visíveis"
+  "total_geral_g": gramas da linha Total coluna Total,
+  "total_modelo_g": gramas da linha Total coluna Modelo,
+  "total_desperdicio_g": soma de suporte+corado+torre da linha Total
 }
-IMPORTANTE: No Bambu Studio o painel de filamentos mostra cores com peso detalhado. A torre de purga (wipe tower/flush) aparece separada. Extraia cada cor separadamente. Se um campo não estiver visível use null.`
+Extraia os números exatamente como aparecem na tabela. Use null apenas se o painel não estiver visível.`
             }
           ]
         }]
@@ -2112,12 +2224,35 @@ IMPORTANTE: No Bambu Studio o painel de filamentos mostra cores com peso detalha
     });
 
     const data = await response.json();
-    const text = data.content?.map(c => c.text||'').join('');
+    console.log('API response status:', response.status);
+    console.log('API response data:', JSON.stringify(data).substring(0, 500));
+    
+    if (data.error) {
+      throw new Error('API error: ' + (data.error.message || JSON.stringify(data.error)));
+    }
+    if (!data.content || !data.content.length) {
+      throw new Error('Resposta vazia da API. Status: ' + response.status + ' — ' + JSON.stringify(data).substring(0,200));
+    }
+    const text = data.content.map(c => c.text||'').join('');
+    console.log('Extracted text:', text.substring(0, 300));
     let parsed;
     try {
-      parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+      const cleaned = text.replace(/```json|```/g,'').trim();
+      // Try to find JSON object in response
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('no json found');
+      parsed = JSON.parse(jsonMatch[0]);
     } catch(e) {
-      throw new Error('Não consegui ler os dados da imagem. Tente um print mais nítido.');
+      console.error('Raw API response:', text);
+      console.error('Parse error:', e.message);
+      fields.innerHTML = `<div style="color:var(--accent);font-size:.78rem">
+        <strong>⚠️ Erro ao interpretar resposta.</strong><br>
+        <details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted)">Ver resposta bruta</summary>
+        <pre style="font-size:.65rem;margin-top:6px;white-space:pre-wrap;color:var(--muted)">${text.substring(0,800)}</pre>
+        </details>
+      </div>`;
+      result.classList.add('show');
+      return;
     }
 
     // Fill fields
@@ -2170,37 +2305,57 @@ IMPORTANTE: No Bambu Studio o painel de filamentos mostra cores com peso detalha
     let html = '';
     if (parsed.modelo) html += `<div class="slicer-field"><span>Modelo</span><span>${parsed.modelo}</span></div>`;
     if (parsed.num_objetos) html += `<div class="slicer-field"><span>Objetos na mesa</span><span>${parsed.num_objetos}</span></div>`;
-    if (parsed.tempo_horas) html += `<div class="slicer-field"><span>Tempo de impressão</span><span>${parsed.tempo_horas}h</span></div>`;
-
-    if (parsed.filamentos) {
-      let totalPeca=0, totalSuporte=0, totalPurga=0, totalGeral=0;
-      parsed.filamentos.forEach((f,i) => {
-        html += `<div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:6px">`;
-        html += `<div style="font-size:.7rem;font-weight:700;color:var(--muted);margin-bottom:4px">`;
-        html += f.hex ? `<span style="display:inline-block;width:10px;height:10px;background:${f.hex};border-radius:50%;margin-right:4px;border:1px solid rgba(0,0,0,.1)"></span>` : '';
-        html += `${f.cor||'Filamento '+(i+1)} (${f.tipo||'?'})</div>`;
-        if (f.peso_peca_g)    html += `<div class="slicer-field"><span>Peça</span><span>${f.peso_peca_g}g</span></div>`;
-        if (f.peso_suporte_g) html += `<div class="slicer-field"><span>Suporte</span><span style="color:var(--warn)">${f.peso_suporte_g}g ♻️</span></div>`;
-        if (f.peso_purga_g)   html += `<div class="slicer-field"><span>Torre/purga</span><span style="color:var(--warn)">${f.peso_purga_g}g ♻️</span></div>`;
-        if (f.peso_total_g)   html += `<div class="slicer-field"><span><strong>Total usado</strong></span><span><strong>${f.peso_total_g}g</strong></span></div>`;
-        html += `</div>`;
-        totalPeca    += f.peso_peca_g||0;
-        totalSuporte += f.peso_suporte_g||0;
-        totalPurga   += f.peso_purga_g||0;
-        totalGeral   += f.peso_total_g||0;
-      });
-      if (parsed.filamentos.length > 1) {
-        const desperdicio = totalSuporte + totalPurga;
-        html += `<div style="margin-top:8px;padding:8px;background:var(--accent-light);border-radius:6px;font-size:.75rem">`;
-        html += `<strong>Resumo:</strong> Peça ${totalPeca.toFixed(1)}g · `;
-        if (totalSuporte) html += `Suporte ${totalSuporte.toFixed(1)}g · `;
-        if (totalPurga)   html += `Purga ${totalPurga.toFixed(1)}g · `;
-        html += `<strong>Total ${totalGeral.toFixed(1)}g</strong>`;
-        if (desperdicio > 0) html += `<br><span style="color:var(--warn)">♻️ ${desperdicio.toFixed(1)}g indo para o lixo (${((desperdicio/totalGeral)*100).toFixed(0)}%)</span>`;
-        html += `</div>`;
-      }
+    if (parsed.tempo_total_horas) {
+      const h = Math.floor(parsed.tempo_total_horas);
+      const m = Math.round((parsed.tempo_total_horas - h) * 60);
+      html += `<div class="slicer-field"><span>Tempo total</span><span>${h}h${m>0?m+'m':''}</span></div>`;
+      // Pre-fill horas field
+      document.getElementById('c-horas').value = parsed.tempo_total_horas.toFixed(2);
     }
-    if (parsed.observacoes) html += `<div style="font-size:.71rem;color:var(--muted);margin-top:6px">${parsed.observacoes}</div>`;
+
+    if (parsed.filamentos && parsed.filamentos.length > 0) {
+      parsed.filamentos.forEach((f, i) => {
+        const desp = (f.peso_suporte_g||0) + (f.peso_corado_g||0) + (f.peso_torre_g||0);
+        html += `<div style="margin-top:8px;padding:9px;background:var(--bg);border-radius:7px">`;
+        html += `<div style="font-size:.7rem;font-weight:700;color:var(--text);margin-bottom:5px">Filamento ${f.numero||i+1}${f.cor&&f.cor!=='Filamento '+(i+1)?' — '+f.cor:''}</div>`;
+        if (f.peso_modelo_g)  html += `<div class="slicer-field"><span>Modelo (peça)</span><span>${f.peso_modelo_g}g</span></div>`;
+        if (f.peso_suporte_g) html += `<div class="slicer-field"><span>Suporte ♻️</span><span style="color:var(--warn)">${f.peso_suporte_g}g</span></div>`;
+        if (f.peso_corado_g)  html += `<div class="slicer-field"><span>Corado/purga ♻️</span><span style="color:var(--warn)">${f.peso_corado_g}g</span></div>`;
+        if (f.peso_torre_g)   html += `<div class="slicer-field"><span>Torre ♻️</span><span style="color:var(--warn)">${f.peso_torre_g}g</span></div>`;
+        html += `<div class="slicer-field"><span><strong>Total</strong></span><span><strong>${f.peso_total_g}g</strong></span></div>`;
+        if (desp > 0) html += `<div style="font-size:.68rem;color:var(--warn);margin-top:3px">♻️ ${desp.toFixed(2)}g desperdício (${((desp/(f.peso_total_g||1))*100).toFixed(0)}%)</div>`;
+        html += `</div>`;
+      });
+    }
+
+    // Summary
+    if (parsed.total_geral_g) {
+      const desp = parsed.total_desperdicio_g||0;
+      const pct = parsed.total_geral_g > 0 ? ((desp/parsed.total_geral_g)*100).toFixed(0) : 0;
+      html += `<div style="margin-top:10px;padding:10px;background:var(--accent-light);border-radius:7px;font-size:.78rem">
+        <strong>Total geral: ${parsed.total_geral_g}g</strong>
+        ${parsed.total_modelo_g ? ` · Peça: ${parsed.total_modelo_g}g` : ''}
+        ${desp > 0 ? `<br><span style="color:var(--accent)">♻️ ${desp.toFixed(2)}g desperdício total (${pct}%)</span>` : ''}
+      </div>`;
+    }
+
+    // Pre-fill filament rows with total weights
+    if (parsed.filamentos && parsed.filamentos.length > 0) {
+      filRows = [];
+      document.getElementById('fil-rows').innerHTML = '';
+      const fs = DB.fils;
+      parsed.filamentos.forEach((f, i) => {
+        const rowId = uid();
+        filRows.push(rowId);
+        renderFilRows();
+        setTimeout(() => {
+          const gEl = document.getElementById('fg-' + rowId);
+          if (gEl && f.peso_total_g) gEl.value = f.peso_total_g;
+          calcular();
+        }, 60 * (i + 1));
+      });
+    }
+
     fields.innerHTML = html;
     result.classList.add('show');
 
